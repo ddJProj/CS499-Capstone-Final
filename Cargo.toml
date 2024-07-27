@@ -1,0 +1,16 @@
+[package]
+name = "final_project"
+version = "0.1.0"
+
+[dependencies]
+mysql = "24.0.0"
+rust-argon2 = "2.1"
+thiserror = "1.0.44"
+config = "0.13.3"
+rand = "0.8.5"
+proc-macro2 = "1.0.60"
+pkg-config = "0.3.27"
+vcpkg = "0.2.15"
+cc = "1.0.79"
+regex-syntax = "0.7.1"
+dotenv = "0.15.0"

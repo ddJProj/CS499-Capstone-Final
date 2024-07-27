@@ -1,0 +1,36 @@
+# rust specific
+target/
+**/*.rs.bk
+
+# test directories / not needed in the final image
+tests/
+
+# git 
+.git/
+.gitignore
+
+# secrets / config
+config.toml
+*.pem
+*.key
+*.crt
+.env
+.vscode/
+.idea/
+*.swp
+*.swo
+Dockerfile
+.dockerignore
+
+# dependencies, large / seed files etc
+/vendor/
+*~
+*.bak
+*.csv
+*.json
+*.xml
+.DS_Store
+Thumbs.db
+*.log
+
+
