@@ -5,8 +5,8 @@ RUN cargo build --release
 # list dir
 RUN ls -la 
 
-# use light weight debian image
-FROM debian:buster-slim
+# use ubuntu image? libssl.so.3 missing from buster-deb
+FROM ubuntu:22.04
 
 # installing dependencies
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
