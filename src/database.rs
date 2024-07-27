@@ -20,11 +20,11 @@ use log::debug;
 use std::borrow::Cow;
 use std::env;
 use std::path::{Path, PathBuf};
-
+use url::Url;
 // imports the Queryable trait from the mysql crate, prelude module
 use mysql::prelude::*;
 // imports all public items from the mysql crate
-use mysql::{params, OptsBuilder, Pool, SslOpts};
+use mysql::{params, Opts, OptsBuilder, Pool, SslOpts};
 
 // imports all public items from the firm_models module
 use crate::firm_models::*;
@@ -72,64 +72,54 @@ impl MySqlDatabase {
                 (
                     // TODO: add more detailed handling such as with the following closure:
                     // .map_err(|e| ApplicationError::VarNAMEHERE(format!("MSGCONTENT: {}", e)))?,
-                    env::var("DB_USERNAME")?,
-                    env::var("DB_PASSWORD")?,
-                    env::var("DB_HOST")?,
-                    env::var("DB_PORT")?.parse::<u16>()?,
-                    env::var("DB_NAME")?, // added for remote hosting
-                    env::var("DB_CA_CERT")?,
+                    env::var("DB_USERNAME").map_err(|e| {
+                        ApplicationError::ConfigError(format!("ERROR WITH DB_USERNAME: {}", e))
+                    })?,
+                    env::var("DB_PASSWORD").map_err(|e| {
+                        ApplicationError::ConfigError(format!("ERROR WITH DB_PASSWORD: {}", e))
+                    })?,
+                    env::var("DB_HOST").map_err(|e| {
+                        ApplicationError::ConfigError(format!("ERROR WITH DB_HOST: {}", e))
+                    })?,
+                    env::var("DB_PORT")
+                        .map_err(|e| {
+                            ApplicationError::ConfigError(format!("ERROR WITH DB_PORT: {}", e))
+                        })?
+                        .parse::<u16>()
+                        .map_err(|e| {
+                            ApplicationError::ConfigError(format!("ERROR PARSING DB_PORT: {}", e))
+                        })?,
+                    env::var("DB_NAME").map_err(|e| {
+                        ApplicationError::ConfigError(format!("ERROR WITH DB_NAME: {}", e))
+                    })?, // added for remote hosting
+                    env::var("DB_CA_CERT").map_err(|e| {
+                        ApplicationError::ConfigError(format!("ERROR WITH DB_CA_CERT: {}", e))
+                    })?,
                     //
                 )
             } else {
-                // local execution / developing
-                let path_config = Path::new("config.toml");
-                let config = Config::builder()
-                    .add_source(File::from(path_config).required(true))
-                    .build()?;
-
-                (
-                    // TODO: add more detailed handling such as with the following closure:
-                    // .map_err(|e| ApplicationError::VarNAMEHERE(format!("MSGCONTENT: {}", e)))?,
-                    config.get_string("database.username")?,
-                    config.get_string("database.password")?,
-                    config.get_string("database.host")?,
-                    config.get_int("database.port")? as u16,
-                    config.get_string("database.name")?,
-                    config.get_string("database.ca_cert")?,
-                )
+                Self::local_connection_config()?
             }
         } else {
-            // local execution / developing
-            let path_config = Path::new("config.toml");
-            let config = Config::builder()
-                .add_source(File::from(path_config).required(true))
-                .build()?;
-
-            (
-                // TODO: add more detailed handling such as with the following closure:
-                // .map_err(|e| ApplicationError::VarNAMEHERE(format!("MSGCONTENT: {}", e)))?,
-                config.get_string("database.username")?,
-                config.get_string("database.password")?,
-                config.get_string("database.host")?,
-                config.get_int("database.port")? as u16,
-                config.get_string("database.name")?,
-                config.get_string("database.ca_cert")?,
-            )
+            Self::local_connection_config()?
         };
 
-        // for troubleshooting
+        let _url = Url::parse(&format!(
+            "mysql://{}:{}@{}:{}/{}?ssl_mode=REQUIRED",
+            user, pw, host, port, db_name
+        ))
+        // being more specific, to trace issue
+        .map_err(|e| ApplicationError::ConfigError(format!("ERROR failed to create URL: {}", e)))?;
+
+        // for troubleshooting / logging
         debug!("Using cert path: {}", cert_path);
 
-        let cert = PathBuf::from(cert_path); // https://doc.rust-lang.org/std/path/struct.PathBuf.html
-                                             // https://docs.rs/mysql/latest/mysql/struct.SslOpts.html#
+        let cert = PathBuf::from(cert_path);
         let ssl_opts = SslOpts::default()
             // https://blog.logrocket.com/using-cow-rust-efficient-memory-utilization/
             .with_root_cert_path(Some(Cow::Owned(cert))) // https://doc.rust-lang.org/nightly/alloc/borrow/enum.Cow.html
-            .with_danger_skip_domain_validation(true);
+            .with_danger_skip_domain_validation(false);
 
-        debug!("Ssl options: {:?}", ssl_opts);
-
-        // https://stackoverflow.com/questions/77823790/how-to-format-string-passed-to-poolnew-of-mysql-crate-in-rust
         let opts = OptsBuilder::new()
             .user(Some(user))
             .pass(Some(pw))
@@ -138,19 +128,42 @@ impl MySqlDatabase {
             .db_name(Some(db_name))
             .ssl_opts(Some(ssl_opts));
 
+        // for troubleshooting / logging
         debug!("Database options: {:?}", opts);
 
         let pool = Pool::new(opts).map_err(|e| ApplicationError::ConfigError(e.to_string()))?;
 
-        debug!("Pool creation successful");
-
-        debug!("Attempting to create database connection.");
+        debug!("Pool creation successful"); // for troubleshooting / logging
         let _conn = pool
             .get_conn()
             .map_err(|e| ApplicationError::ConfigError(e.to_string()))?;
+        //
+        debug!("DB connected successfully."); // for troubleshooting / logging
 
-        debug!("DB connection successful.");
+        // add if needed
+        // conn.query_drop("SET SESSION tls_version='TLSv1.?, TLSv1.?'")
+        //     .map_err(|e| {
+        //         ApplicationError::ConfigError(format!("Failed to set TLS version: {}", e))
+        //     })?;
+
         Ok(MySqlDatabase { pool })
+    }
+
+    fn local_connection_config(
+    ) -> Result<(String, String, String, u16, String, String), ApplicationError> {
+        let path_config = Path::new("config.toml");
+        let config = Config::builder()
+            .add_source(File::from(path_config).required(true))
+            .build()?;
+        // exported to remove duplicate definition
+        Ok((
+            config.get_string("database.username")?,
+            config.get_string("database.password")?,
+            config.get_string("database.host")?,
+            config.get_int("database.port")? as u16,
+            config.get_string("database.name")?,
+            config.get_string("database.ca_cert")?,
+        ))
     }
 }
 /// definition for the interface that is used to manage

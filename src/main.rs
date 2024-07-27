@@ -62,6 +62,7 @@ extern crate mysql;
 extern crate rand;
 extern crate regex_syntax;
 extern crate thiserror;
+extern crate url;
 
 mod auth;
 mod data_structs;

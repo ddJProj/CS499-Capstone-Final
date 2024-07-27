@@ -35,6 +35,7 @@ use crate::errors::ApplicationError;
 ///* `client_handler` - Dependency manages client specific operations
 ///* `employee_handler` - Dependency manages employee specific operations
 ///
+#[allow(dead_code)] // since employee_handler is not actively used
 pub struct Menu {
     client_handler: ClientHandler,
     employee_handler: EmployeeHandler,

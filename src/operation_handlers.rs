@@ -254,7 +254,7 @@ impl ClientHandler {
                 .entry(client.get_asn_employee())
                 .or_insert_with(Vec::new)
                 .push(client.get_client_id());
-            local_avltree.insert(client); // call insert method on each client
+            local_avltree.insert(client)?; // call insert method on each client
         }
 
         Ok(Self {
@@ -333,8 +333,8 @@ impl ClientHandler {
             .db
             .update_client(client)
             .map_err(ApplicationError::from)?;
-        self.local_avl_tree.remove(client.get_client_id());
-        self.local_avl_tree.insert(client.clone());
+        self.local_avl_tree.remove(client.get_client_id())?;
+        self.local_avl_tree.insert(client.clone())?;
         transaction.commit()?;
 
         Ok(()) // return okay
@@ -360,7 +360,7 @@ impl ClientHandler {
     pub fn new_client(&mut self, client: &Client) -> Result<(), ApplicationError> {
         let transaction = Transaction::new(&mut self.database)?;
         transaction.db.new_client(client)?;
-        self.local_avl_tree.insert(client.clone());
+        self.local_avl_tree.insert(client.clone())?;
         transaction.commit()?;
 
         Ok(())
@@ -387,7 +387,7 @@ impl ClientHandler {
     pub fn remove_client(&mut self, client: &Client) -> Result<(), ApplicationError> {
         let transaction = Transaction::new(&mut self.database)?;
         transaction.db.remove_client(client)?;
-        self.local_avl_tree.remove(client.get_client_id());
+        self.local_avl_tree.remove(client.get_client_id())?;
 
         transaction.commit()?;
         Ok(())
