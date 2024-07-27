@@ -118,7 +118,7 @@ impl MySqlDatabase {
         let ssl_opts = SslOpts::default()
             // https://blog.logrocket.com/using-cow-rust-efficient-memory-utilization/
             .with_root_cert_path(Some(Cow::Owned(cert))) // https://doc.rust-lang.org/nightly/alloc/borrow/enum.Cow.html
-            .with_danger_skip_domain_validation(false);
+            .with_danger_skip_domain_validation(true);
 
         let opts = OptsBuilder::new()
             .user(Some(user))
