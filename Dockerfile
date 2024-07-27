@@ -14,12 +14,12 @@ RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/
 #directory setup
 COPY --from=builder /usr/src/app/target/release/final_project /usr/local/bin/final_project
 # prep cert for db operations
-COPY --from=builder /usr/src/app/ca-certificate.crt /etc/ssl/certs/ca-certificate.crt
+COPY ca-certificate.crt /etc/ssl/certs/ca-certificate.crt
 # is it permissions issue?
-RUN chmod 644 /etc/ssl/certs/ca-certificate.crt
+#RUN chmod 644 /etc/ssl/certs/ca-certificate.crt
 
-# list certs dir
-RUN ls -la /etc/ssl/certs/
+# list cert file perms/details
+RUN ls -la /etc/ssl/certs/ca-certificate.crt
 
 # set the env var for cert using provided cert
 ENV DB_CA_CERT=/etc/ssl/certs/ca-certificate.crt
