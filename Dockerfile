@@ -19,16 +19,19 @@ COPY --from=builder /usr/src/app/target/release/final_project /usr/local/bin/fin
 #COPY ca-certificate.crt /etc/ssl/certs/ca-certificate.crt
 # is it permissions issue?
 
-RUN echo "$CA_CERTIFICATE_DATA" | sed 's/\\n/\n/g' > /etc/ssl/certs/ca-certificate.crt 
-RUN chmod 644 /etc/ssl/certs/ca-certificate.crt
-# check contens
-RUN cat /etc/ssl/certs/ca-certificate.crt
+#JUST SET UP CERT WITH BASH SCRIPT
+RUN echo '#!/bin/bash\n
+RUN echo "$CA_CERTIFICATE_DATA" > /etc/ssl/certs/ca-certificate.crt\n
+RUN chmod 644 /etc/ssl/certs/ca-certificate.crt\n
+RUN echo "CERT content:"\n
+RUN cat /etc/ssl/certs/ca-certificate.crt\n
+RUN echo "CERT permissions:"\n
+RUN ls -l /etc/ssl/certs/ca-certificate.crt\n
+RUN exec "$@"' > /cert_entry.sh && chmod +x /cert_entry.sh
 
 
-#RUN echo "$CA_CERTIFICATE_DATA" > /etc/ssl/certs/ca-certificate.crt
 
-# list cert file perms/details
-RUN ls -la /etc/ssl/certs/ca-certificate.crt
+
 
 # set the env var for cert using provided cert
 ENV DB_CA_CERT=/etc/ssl/certs/ca-certificate.crt

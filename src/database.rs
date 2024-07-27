@@ -20,8 +20,7 @@ use log::debug;
 use std::borrow::Cow;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::task::Context;
-use url::Url;
+//use std::task::Context;
 // imports the Queryable trait from the mysql crate, prelude module
 use mysql::prelude::*;
 // imports all public items from the mysql crate
@@ -104,17 +103,19 @@ impl MySqlDatabase {
         } else {
             Self::local_connection_config()?
         };
+        debug!("Env: {:?}", env::var("ENVIRONMENT"));
 
-        let _url = Url::parse(&format!(
-            "mysql://{}:{}@{}:{}/{}?ssl_mode=REQUIRED",
-            user, pw, host, port, db_name
-        ))
-        // being more specific, to trace issue
-        .map_err(|e| ApplicationError::ConfigError(format!("ERROR failed to create URL: {}", e)))?;
+        let cert = PathBuf::from(&cert_path);
 
-        // let cert = PathBuf::from(cert_path);
-
-        let cert = PathBuf::from("/etc/ssl/certs/ca-certificate.crt");
+        if cert.exists() {
+            match std::fs::read_to_string(&cert) {
+                Ok(content) => debug!(
+                    "CERT CONTENT CHECK: {}",
+                    content.chars().take(100).collect::<String>()
+                ),
+                Err(e) => debug!("ERROR READING CERT CONTENT {}", e),
+            }
+        }
 
         let ssl_opts = SslOpts::default()
             // https://blog.logrocket.com/using-cow-rust-efficient-memory-utilization/
@@ -130,23 +131,7 @@ impl MySqlDatabase {
             .db_name(Some(db_name))
             .ssl_opts(Some(ssl_opts));
 
-        // for troubleshooting / logging
-        debug!("CERT PATH: {:}", cert_path);
-        // for troubleshooting / logging
-        debug!(
-            "IS CERT VALID/EXISTS: {}",
-            std::path::Path::new(cert_path).exists()
-        );
-
-        if let Ok(content) = std::fs::read_to_string(cert_path) {
-            debug!(
-                " PRINTING SOME OF CERT : {}",
-                content.chars().take(75).collect::<String>()
-            );
-        } else {
-            // for troubleshooting / logging
-            debug!("CERT IS INVALID/WAS NOT COPIED CORRECTLY");
-        }
+        debug!("Database options: {:?}", opts);
 
         let pool = Pool::new(opts).map_err(|e| ApplicationError::ConfigError(e.to_string()))?;
 
