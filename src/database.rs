@@ -20,6 +20,7 @@ use log::debug;
 use std::borrow::Cow;
 use std::env;
 use std::path::{Path, PathBuf};
+use std::task::Context;
 use url::Url;
 // imports the Queryable trait from the mysql crate, prelude module
 use mysql::prelude::*;
@@ -111,13 +112,14 @@ impl MySqlDatabase {
         // being more specific, to trace issue
         .map_err(|e| ApplicationError::ConfigError(format!("ERROR failed to create URL: {}", e)))?;
 
-        // for troubleshooting / logging
-        debug!("Using cert path: {}", cert_path);
+        // let cert = PathBuf::from(cert_path);
 
-        let cert = PathBuf::from(cert_path);
+        let cert = PathBuf::from("/etc/ssl/certs/ca-certificate.crt");
+
         let ssl_opts = SslOpts::default()
             // https://blog.logrocket.com/using-cow-rust-efficient-memory-utilization/
             .with_root_cert_path(Some(Cow::Owned(cert))) // https://doc.rust-lang.org/nightly/alloc/borrow/enum.Cow.html
+            //.with_danger_accept_invalid_certs(true)
             .with_danger_skip_domain_validation(true);
 
         let opts = OptsBuilder::new()
@@ -129,7 +131,22 @@ impl MySqlDatabase {
             .ssl_opts(Some(ssl_opts));
 
         // for troubleshooting / logging
-        debug!("Database options: {:?}", opts);
+        debug!("CERT PATH: {:}", cert_path);
+        // for troubleshooting / logging
+        debug!(
+            "IS CERT VALID/EXISTS: {}",
+            std::path::Path::new(cert_path).exists()
+        );
+
+        if let Ok(content) = std::fs::read_to_string(cert_path) {
+            debug!(
+                " PRINTING SOME OF CERT : {}",
+                content.chars().take(75).collect::<String>()
+            );
+        } else {
+            // for troubleshooting / logging
+            debug!("CERT IS INVALID/WAS NOT COPIED CORRECTLY");
+        }
 
         let pool = Pool::new(opts).map_err(|e| ApplicationError::ConfigError(e.to_string()))?;
 

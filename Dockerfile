@@ -18,8 +18,14 @@ COPY --from=builder /usr/src/app/target/release/final_project /usr/local/bin/fin
 # prep cert for db operations
 #COPY ca-certificate.crt /etc/ssl/certs/ca-certificate.crt
 # is it permissions issue?
-#RUN chmod 644 /etc/ssl/certs/ca-certificate.crt
-RUN echo "$CA_CERTIFICATE_DATA" > /etc/ssl/certs/ca-certificate.crt
+
+RUN echo "$CA_CERTIFICATE_DATA" | sed 's/\\n/\n/g' > /etc/ssl/certs/ca-certificate.crt 
+RUN chmod 644 /etc/ssl/certs/ca-certificate.crt
+# check contens
+RUN cat /etc/ssl/certs/ca-certificate.crt
+
+
+#RUN echo "$CA_CERTIFICATE_DATA" > /etc/ssl/certs/ca-certificate.crt
 
 # list cert file perms/details
 RUN ls -la /etc/ssl/certs/ca-certificate.crt
