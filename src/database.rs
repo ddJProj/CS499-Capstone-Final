@@ -24,7 +24,7 @@ use url::Url;
 // imports the Queryable trait from the mysql crate, prelude module
 use mysql::prelude::*;
 // imports all public items from the mysql crate
-use mysql::{params, Opts, OptsBuilder, Pool, SslOpts};
+use mysql::{params, OptsBuilder, Pool, SslOpts};
 
 // imports all public items from the firm_models module
 use crate::firm_models::*;
