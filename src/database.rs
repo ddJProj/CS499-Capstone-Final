@@ -125,7 +125,9 @@ impl MySqlDatabase {
         let ssl_opts = SslOpts::default()
             // https://blog.logrocket.com/using-cow-rust-efficient-memory-utilization/
             .with_root_cert_path(Some(Cow::Owned(cert))) // https://doc.rust-lang.org/nightly/alloc/borrow/enum.Cow.html
-            .with_danger_skip_domain_validation(false);
+            .with_danger_skip_domain_validation(true);
+
+        debug!("Ssl options: {:?}", ssl_opts);
 
         // https://stackoverflow.com/questions/77823790/how-to-format-string-passed-to-poolnew-of-mysql-crate-in-rust
         let opts = OptsBuilder::new()
@@ -136,7 +138,11 @@ impl MySqlDatabase {
             .db_name(Some(db_name))
             .ssl_opts(Some(ssl_opts));
 
+        debug!("Database options: {:?}", opts);
+
         let pool = Pool::new(opts).map_err(|e| ApplicationError::ConfigError(e.to_string()))?;
+
+        debug!("Pool creation successful");
 
         debug!("Attempting to create database connection.");
         let _conn = pool
