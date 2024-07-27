@@ -7,9 +7,9 @@
 //! This module provides reusable utility functions to the application.
 //! These take the form of input validation/sanitization methods.
 
-use std::io::{self, Write};
-
 use crate::errors::ApplicationError;
+use log::{error, info, warn};
+use std::io::{self, Write};
 
 //
 // ********************************************
@@ -45,25 +45,40 @@ pub fn get_integer_input() -> Result<i32, ApplicationError> {
 
         print!("Enter your choice as an integer: ");
         // https://doc.rust-lang.org/std/macro.print.html
-        std::io::stdout()
-            .flush()
-            .map_err(|e| ApplicationError::IoError(e))?;
+
+        match std::io::stdout().flush() {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Failed to flush stdout: {:?}", e);
+                return Err(ApplicationError::IoError(e));
+            }
+        }
 
         // begins by reading line into mut& input_string for matching
         match std::io::stdin().read_line(&mut input_string) {
-            // input successful, assign it place of Ok(wildcard)
-            // attempt parse/trim input to 64bit integer
-            Ok(_) => match input_string.trim().parse::<i64>() {
-                // valid i32 int is greater or equal to -2147483648 AND less or = to 2147483648,
-                Ok(num) if num >= std::i32::MIN as i64 && num <= std::i32::MAX as i64 => {
-                    return Ok(num as i32);
-                }
+            Ok(_) => {
+                // input successful, assign it place of Ok(wildcard)
+                // attempt parse/trim input to 64bit integer
+                info!("user input: {}", input_string.trim());
+                match input_string.trim().parse::<i64>() {
+                    // valid i32 int is greater or equal to -2147483648 AND less or = to 2147483648,
+                    Ok(num) if num >= i32::MIN as i64 && num <= i32::MAX as i64 => {
+                        info!("You entered the valid integer: {}", num);
+                        return Ok(num as i32);
+                    }
 
-                _ => {
-                    println!("\nYou must enter a valid integer.");
+                    Ok(num) => {
+                        warn!("Out of range for valid 32-bit integer: {}", num);
+                        println!("\nThe number is out of the valid range for this operation.");
+                    }
+                    Err(e) => {
+                        warn!("Error, could not parse as integer: {:?}", e);
+                        println!("\nYou must enter a valid integer.");
+                    }
                 }
-            },
+            }
             Err(e) => {
+                error!("Error, could not read input: {:?}", e);
                 return Err(ApplicationError::IoError(e));
             }
         }
