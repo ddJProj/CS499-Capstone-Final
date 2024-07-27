@@ -101,7 +101,7 @@ impl MySqlDatabase {
         };
         debug!("Env: {:?}", env::var("ENVIRONMENT"));
 
-        let cert_path = env::current_dir()?.join("ca-certificate.crt");
+        let cert_path = PathBuf::from("/usr/src/app/ca-certificate.crt");
 
         if cert_path.exists() {
             match std::fs::read_to_string(&cert_path) {

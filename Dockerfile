@@ -20,16 +20,22 @@ COPY --from=builder /usr/src/app/ca-certificate.crt /usr/src/app/ca-certificate.
 RUN ls -la 
 
 RUN chmod 644 /usr/src/app/ca-certificate.crt && \
-    echo "CERT CONTENT:" && \
+    chmod +x /usr/src/app/final_project && \
+    echo "Certificate content:" && \
     cat /usr/src/app/ca-certificate.crt && \
-    echo "CERT PERMS:" && \
-    ls -l /usr/src/app/ca-certificate.crt
+    echo "Certificate permissions:" && \
+    ls -l /usr/src/app/ca-certificate.crt && \
+    echo "Executable permissions:" && \
+    ls -l /usr/src/app/final_project
 
 
+# add to path
+ENV PATH="/usr/src/app:${PATH}"
 # set the env var for cert using provided cert
 ENV DB_CA_CERT=/usr/src/app/ca-certificate.crt
 
 # port to open for project
 EXPOSE 8080
 
-CMD ["final_project"]
+# full path?
+CMD ["/usr/src/app/final_project"]
