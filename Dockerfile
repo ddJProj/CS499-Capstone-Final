@@ -20,14 +20,14 @@ COPY --from=builder /usr/src/app/target/release/final_project /usr/local/bin/fin
 # is it permissions issue?
 
 #JUST SET UP CERT WITH BASH SCRIPT
-RUN echo '#!/bin/bash\n
-RUN echo "$CA_CERTIFICATE_DATA" > /etc/ssl/certs/ca-certificate.crt\n
-RUN chmod 644 /etc/ssl/certs/ca-certificate.crt\n
-RUN echo "CERT content:"\n
-RUN cat /etc/ssl/certs/ca-certificate.crt\n
-RUN echo "CERT permissions:"\n
-RUN ls -l /etc/ssl/certs/ca-certificate.crt\n
-RUN exec "$@"' > /cert_entry.sh && chmod +x /cert_entry.sh
+RUN echo '#!/bin/bash\n\
+echo "$CA_CERTIFICATE_DATA" > /etc/ssl/certs/ca-certificate.crt\n\
+chmod 644 /etc/ssl/certs/ca-certificate.crt\n\
+echo "Certificate content:"\n\
+cat /etc/ssl/certs/ca-certificate.crt\n\
+echo "Certificate permissions:"\n\
+ls -l /etc/ssl/certs/ca-certificate.crt\n\
+exec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 
 
