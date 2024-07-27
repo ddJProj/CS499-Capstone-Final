@@ -11,6 +11,8 @@ FROM ubuntu:22.04
 # installing dependencies
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
+ENV RUST_LOG=debug
+
 #directory setup
 COPY --from=builder /usr/src/app/target/release/final_project /usr/local/bin/final_project
 # prep cert for db operations

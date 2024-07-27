@@ -54,9 +54,10 @@
 //!
 //!
 //!
-
 extern crate argon2;
 extern crate config;
+extern crate env_logger;
+extern crate log;
 extern crate mysql;
 extern crate rand;
 extern crate regex_syntax;
@@ -98,6 +99,8 @@ use crate::menu::Menu;
 /// during main menu looping
 ///
 fn main() -> Result<(), ApplicationError> {
+    env_logger::init(); // initialize logging
+
     //  : type annotation for mutable db.
     //  Box containing trait object implementation of DatabaseManager
     //  assigned to a box containing new MySqlDatabase instance

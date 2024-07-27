@@ -16,6 +16,7 @@
 // imports items needed for defining external files for configuration/secrets
 use config::{Config, File};
 // imports the Path struct from the standard library path module
+use log::debug;
 use std::borrow::Cow;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -116,6 +117,9 @@ impl MySqlDatabase {
             )
         };
 
+        // for troubleshooting
+        debug!("Using cert path: {}", cert_path);
+
         let cert = PathBuf::from(cert_path); // https://doc.rust-lang.org/std/path/struct.PathBuf.html
                                              // https://docs.rs/mysql/latest/mysql/struct.SslOpts.html#
         let ssl_opts = SslOpts::default()
@@ -128,16 +132,18 @@ impl MySqlDatabase {
             .user(Some(user))
             .pass(Some(pw))
             .ip_or_hostname(Some(host))
-            .tcp_port(port as u16)
+            .tcp_port(port)
             .db_name(Some(db_name))
             .ssl_opts(Some(ssl_opts));
 
         let pool = Pool::new(opts).map_err(|e| ApplicationError::ConfigError(e.to_string()))?;
 
+        debug!("Attempting to create database connection.");
         let _conn = pool
             .get_conn()
             .map_err(|e| ApplicationError::ConfigError(e.to_string()))?;
 
+        debug!("DB connection successful.");
         Ok(MySqlDatabase { pool })
     }
 }
