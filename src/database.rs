@@ -66,7 +66,7 @@ impl MySqlDatabase {
     ///     'ApplicationError' - An error referencing the cause of the failure
     ///
     pub fn new() -> Result<Self, ApplicationError> {
-        let (user, pw, host, port, db_name, cert_path) = if let Ok(env) = env::var("ENVIRONMENT") {
+        let (user, pw, host, port, db_name) = if let Ok(env) = env::var("ENVIRONMENT") {
             if env == "production" {
                 // use for remote hoshing on oceanDigital
                 (
@@ -92,10 +92,6 @@ impl MySqlDatabase {
                     env::var("DB_NAME").map_err(|e| {
                         ApplicationError::ConfigError(format!("ERROR WITH DB_NAME: {}", e))
                     })?, // added for remote hosting
-                    env::var("DB_CA_CERT").map_err(|e| {
-                        ApplicationError::ConfigError(format!("ERROR WITH DB_CA_CERT: {}", e))
-                    })?,
-                    //
                 )
             } else {
                 Self::local_connection_config()?
@@ -105,21 +101,24 @@ impl MySqlDatabase {
         };
         debug!("Env: {:?}", env::var("ENVIRONMENT"));
 
-        let cert = PathBuf::from(&cert_path);
+        let cert_path = env::current_dir()?.join("ca-certificate.crt");
 
-        if cert.exists() {
-            match std::fs::read_to_string(&cert) {
+        if cert_path.exists() {
+            match std::fs::read_to_string(&cert_path) {
                 Ok(content) => debug!(
                     "CERT CONTENT CHECK: {}",
                     content.chars().take(100).collect::<String>()
                 ),
                 Err(e) => debug!("ERROR READING CERT CONTENT {}", e),
             }
+        } else {
+            debug!("CERT FILE MISSING?");
+            debug!("CURRENT DIR CONTENTS: {:?}", std::fs::read_dir(".")?);
         }
 
         let ssl_opts = SslOpts::default()
             // https://blog.logrocket.com/using-cow-rust-efficient-memory-utilization/
-            .with_root_cert_path(Some(Cow::Owned(cert))) // https://doc.rust-lang.org/nightly/alloc/borrow/enum.Cow.html
+            .with_root_cert_path(Some(Cow::Owned(cert_path))) // https://doc.rust-lang.org/nightly/alloc/borrow/enum.Cow.html
             //.with_danger_accept_invalid_certs(true)
             .with_danger_skip_domain_validation(true);
 
@@ -151,8 +150,8 @@ impl MySqlDatabase {
         Ok(MySqlDatabase { pool })
     }
 
-    fn local_connection_config(
-    ) -> Result<(String, String, String, u16, String, String), ApplicationError> {
+    fn local_connection_config() -> Result<(String, String, String, u16, String), ApplicationError>
+    {
         let path_config = Path::new("config.toml");
         let config = Config::builder()
             .add_source(File::from(path_config).required(true))
@@ -164,7 +163,6 @@ impl MySqlDatabase {
             config.get_string("database.host")?,
             config.get_int("database.port")? as u16,
             config.get_string("database.name")?,
-            config.get_string("database.ca_cert")?,
         ))
     }
 }

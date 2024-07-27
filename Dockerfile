@@ -2,8 +2,7 @@ FROM rust:latest as builder
 WORKDIR /usr/src/app
 COPY . .
 RUN cargo build --release
-# list dir
-RUN ls -la 
+
 
 # use ubuntu image? libssl.so.3 missing from buster-deb
 FROM ubuntu:22.04
@@ -14,27 +13,21 @@ RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/
 ENV RUST_LOG=debug
 
 #directory setup
-COPY --from=builder /usr/src/app/target/release/final_project /usr/local/bin/final_project
-# prep cert for db operations
-#COPY ca-certificate.crt /etc/ssl/certs/ca-certificate.crt
-# is it permissions issue?
+COPY --from=builder /usr/src/app/target/release/final_project /usr/src/app/final_project
+# try just importing from repo
+COPY --from=builder /usr/src/app/ca-certificate.crt /usr/src/app/ca-certificate.crt
+# list dir
+RUN ls -la 
 
-#JUST SET UP CERT WITH BASH SCRIPT
-RUN echo '#!/bin/bash\n\
-echo "$CA_CERTIFICATE_DATA" > /etc/ssl/certs/ca-certificate.crt\n\
-chmod 644 /etc/ssl/certs/ca-certificate.crt\n\
-echo "Certificate content:"\n\
-cat /etc/ssl/certs/ca-certificate.crt\n\
-echo "Certificate permissions:"\n\
-ls -l /etc/ssl/certs/ca-certificate.crt\n\
-exec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
-
-
-
+RUN chmod 644 /usr/src/app/ca-certificate.crt && \
+    echo "CERT CONTENT:" && \
+    cat /usr/src/app/ca-certificate.crt && \
+    echo "CERT PERMS:" && \
+    ls -l /usr/src/app/ca-certificate.crt
 
 
 # set the env var for cert using provided cert
-ENV DB_CA_CERT=/etc/ssl/certs/ca-certificate.crt
+ENV DB_CA_CERT=/usr/src/app/ca-certificate.crt
 
 # port to open for project
 EXPOSE 8080
