@@ -66,7 +66,7 @@ impl MySqlDatabase {
     ///
     pub fn new() -> Result<Self, ApplicationError> {
         let (user, pw, host, port, db_name, cert_path) = if let Ok(env) = env::var("ENVIRONMENT") {
-            if env == "production" {
+            if env == "remote" {
                 // use for remote hoshing on oceanDigital
                 (
                     // TODO: add more detailed handling such as with the following closure:

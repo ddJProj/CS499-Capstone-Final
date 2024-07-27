@@ -11,8 +11,8 @@ Cargo.lock
 # MSVC Windows builds of rustc 
 *.pdb
 
-# database certificate
-ca-certificate.crt
+# database certificate not necc as public cert
+#ca-certificate.crt 
 
 # database configuration file with sensitive data 
 config.toml
