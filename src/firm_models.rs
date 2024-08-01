@@ -271,7 +271,22 @@ impl Client {
     pub fn get_asn_employee(&self) -> i32 {
         self.asn_employee_id
     }
-
+    /// set / mutator function for a assigned employee id
+    ///
+    /// used to set value of an employee id for a client/employee
+    /// pairing.
+    ///
+    ///# Arguments
+    ///
+    ///* '&mut self' - a mutable reference to self
+    ///
+    ///# Returns
+    ///
+    ///* 'i32' - a 32-bit integer value (self.asn_employee_id)
+    ///
+    pub fn change_client_employee_pair(&mut self, new_employee_id: i32) {
+        self.asn_employee_id = new_employee_id;
+    }
     /// mutator / set method for client_id
     ///
     /// sets local id value for a client to value provided from db.

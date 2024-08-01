@@ -105,6 +105,11 @@ impl Menu {
                         println!("\nError changing service: {}", e);
                     }
                 }
+                Some(MainMenuChoice::ChangeClientEmployeePair) => {
+                    if let Err(e) = self.change_client_employee_pair() {
+                        println!("\nError changing client pairing: {}", e);
+                    }
+                }
                 Some(MainMenuChoice::ExitProgram) => {
                     println!("\nGoodbye.");
                     break;
@@ -199,6 +204,153 @@ impl Menu {
         Ok(())
     }
 
+    /// change display choice for changing employee client pairing
+    ///
+    /// outputs a confirmation message notifying the user of their
+    /// menu selection option, also outputs the initial request for
+    /// a client's client id value.
+    ///
+    ///# Arguments
+    ///
+    ///* '&mut self' - Reference to mutable self
+    ///
+    ///# Returns
+    ///
+    ///* 'Result<Self, ApplicationError>' -
+    ///     on success:
+    ///         Ok(())
+    ///     on fail:
+    ///         ApplicationError - If an error occurs due to a failure at any point of the
+    ///             call chain, it will be returned here
+
+    ///# Errors
+    ///
+    /// This function returns the error : DatabaseError::NotFoundError if
+    /// the provided client_id does not match an existing client.
+    ///
+    fn change_client_employee_pair(&mut self) -> Result<(), ApplicationError> {
+        println!("\nYou chose option: Change Client / Employee pairing");
+        println!(
+            "Please enter the client ID of the client whose pairing you would like to change."
+        );
+        println!("You may also enter 0 to return to the previous menu.\n");
+        self.client_pairing_handler()
+    }
+
+    /// Manages operations related to changing customer employee pairings
+    ///
+    /// Handles user input related to selecting individual clients by
+    /// their id values. If a match is found, then calls the change
+    /// employee pairing function. Returns Ok and result of the changes, or returned
+    /// Error. For no match found, returns NoMatchError
+    ///
+    ///# Arguments
+    ///
+    ///* '&mut self' - Reference to mutable self
+    ///
+    ///# Returns
+    ///
+    ///* 'Result<(), ApplicationError>' -
+    ///     on success:
+    ///         Ok(()) - Return Ok and the result for any non-failure operation outcomes
+    ///     on fail:
+    ///         ApplicationError - If an
+    ///             initialization of data structures, data operations, data retrieval, or
+    ///             transactions
+    ///
+    ///# Behaviors
+    ///
+    ///* 1. Prompts user to provide a client_id integer
+    ///* 2. attempts to locate an existing client object using ID value
+    ///* 3. if located, prompts to provide the employee_id value for new pairing
+    ///* 4. if valid employee match found, updates the client's employee pairing
+    ///* 5. updates the user with output related to their provided values
+    ///
+    fn client_pairing_handler(&mut self) -> Result<(), ApplicationError> {
+        let client_id = get_integer_input()?;
+
+        let client = match self.client_handler.get_client(client_id) {
+            Ok(client_match) => client_match.clone(), // clone here, to not upset borrow checker
+            Err(e) => {
+                println!("An error occurred while locating the client: {}", e);
+                return Ok(());
+            }
+        };
+
+        let new_employee_id = self.get_new_pair_employee_id()?;
+
+        if new_employee_id != 0 {
+            let mut updated_client = client;
+            updated_client.change_client_employee_pair(new_employee_id);
+
+            match self.client_handler.update_client(&updated_client) {
+                Ok(_) => {
+                    println!(
+                        "Client: {} is now paired with Employee: {}",
+                        client_id, new_employee_id
+                    );
+                }
+                Err(e) => {
+                    println!("An error occurred while updating the client:{}", e);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// new employee for client pairing selection function
+    ///
+    /// handle gathering of new employee_id for client-employee pairing changes
+    /// checks that the employee is valid, and allows user to return to the
+    /// previous menu without committing changes if desired.
+    ///
+    ///# Arguments
+    ///
+    ///* '&mut self' - mutable reference to self
+    ///
+    ///# Returns
+    ///
+    ///* 'Result<i32 integer, ApplicationError>' -
+    ///     on success:
+    ///         Ok(0) - ok status and return to previous menu selected
+    ///         Ok(target_employee_id) - ok status and the valid, located employee_id
+    ///     on fail:
+    ///         ApplicationError - If an error occurs due to a failure at any point of these
+    ///         operations, return the ApplicationError. This is only when errors occur, as
+    ///         function will continue asking for valid input if invalid input provided.
+    ///
+    fn get_new_pair_employee_id(&mut self) -> Result<i32, ApplicationError> {
+        loop {
+            println!(
+                "\nPlease enter the ID of the employee you would like to pair with the client. Enter 0 to return to previous menu."
+            );
+            let target_employee_id = get_integer_input()?;
+            if target_employee_id == 0 {
+                return Ok(0); // return to previous menu selected
+            }
+
+            match self
+                .employee_handler
+                .is_valid_employee_id(target_employee_id)
+            {
+                Ok(true) => return Ok(target_employee_id),
+                Ok(false) => println!("Invalid ID provided. Please enter a valid employee ID, or 0 to return to previous menu."),
+                Err(e) => {
+                    println!("An error occurred while fetching employee ID: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    //
+    //
+    //
+    //-------------------------------------------------------
+    //-------------------------------------------------------
+    //
+    //
+
     /// console output function to generate clients list
     ///
     /// outputs a list of clients to console using the
@@ -265,7 +417,8 @@ impl Menu {
         println!("\nWhat would you like to do?");
         println!("DISPLAY the client list (enter 1)");
         println!("CHANGE a client's choice (enter 2)");
-        println!("Exit the program.. (enter 3)");
+        println!("CHANGE a client's employee partner (enter 3)");
+        println!("Exit the program.. (enter 4)");
         println!("\nPlease provide a selection matching a valid menu option. ");
     }
 
@@ -321,7 +474,8 @@ pub enum MainMenuChoice {
     DefaultMenuValue = -1,
     PrintClientList = 1,
     ChangeServiceChoice = 2,
-    ExitProgram = 3,
+    ChangeClientEmployeePair = 3,
+    ExitProgram = 4,
 }
 
 impl MainMenuChoice {
@@ -344,7 +498,8 @@ impl MainMenuChoice {
             -1 => Some(MainMenuChoice::DefaultMenuValue),
             1 => Some(MainMenuChoice::PrintClientList),
             2 => Some(MainMenuChoice::ChangeServiceChoice),
-            3 => Some(MainMenuChoice::ExitProgram),
+            3 => Some(MainMenuChoice::ChangeClientEmployeePair),
+            4 => Some(MainMenuChoice::ExitProgram),
             _ => None,
         }
     }

@@ -10,7 +10,8 @@ tests/
 .gitignore
 
 # secrets / config
-config.toml
+# REMEMBER TO UNCOMMENT THIS BEFORE PUSHING NEW V to GH
+#config.toml
 *.pem
 *.key
 

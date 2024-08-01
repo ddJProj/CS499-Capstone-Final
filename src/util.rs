@@ -8,7 +8,8 @@
 //! These take the form of input validation/sanitization methods.
 
 use crate::errors::ApplicationError;
-use log::{error, info, warn};
+use log::{error, warn};
+
 use std::io::{self, Write};
 
 //
@@ -59,11 +60,11 @@ pub fn get_integer_input() -> Result<i32, ApplicationError> {
             Ok(_) => {
                 // input successful, assign it place of Ok(wildcard)
                 // attempt parse/trim input to 64bit integer
-                info!("user input: {}", input_string.trim());
+                //info!("user input: {}", input_string.trim());
                 match input_string.trim().parse::<i64>() {
                     // valid i32 int is greater or equal to -2147483648 AND less or = to 2147483648,
                     Ok(num) if num >= i32::MIN as i64 && num <= i32::MAX as i64 => {
-                        info!("You entered the valid integer: {}", num);
+                        //info!("You entered the valid integer: {}", num);
                         return Ok(num as i32);
                     }
 

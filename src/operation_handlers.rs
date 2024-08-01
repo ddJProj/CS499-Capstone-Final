@@ -46,6 +46,8 @@ use crate::errors::ApplicationError;
 pub struct EmployeeHandler {
     // Store employee hashes for ref when authorizing login
     stored_hashes: HashMap<i32, String>,
+    // lazily store employee objects locally when valid employee checks called.
+    stored_employees: HashMap<i32, Employee>,
     // database connection to perform relevant employee operations
     database: Box<dyn DatabaseManager>,
 }
@@ -68,9 +70,9 @@ impl EmployeeHandler {
     // we will use a somewhat "lazy" approach to caching employee hashes.
     // load them as needed, and then store them locally
     pub fn new(database: Box<dyn DatabaseManager>) -> Result<Self, ApplicationError> {
-        let stored_hashes = HashMap::new();
         Ok(Self {
-            stored_hashes,
+            stored_hashes: HashMap::new(),
+            stored_employees: HashMap::new(),
             database,
         })
     }
@@ -111,6 +113,76 @@ impl EmployeeHandler {
             None => Ok(None),
         }
     }
+    /// retrieves an employee from the db by employee_id
+    ///
+    /// retrieval function for a specific employee object, used to
+    /// check db for matching employee when not found within local
+    /// stored employee hashmap. Lazily loads the employee object into
+    /// the local stored employee and stored hashes hashmaps
+    ///
+    /// # Arguments
+    ///
+    /// * `&mut self` - mutable ref to instance of employehandler
+    /// * `employee_id: i32` - employee id corresponding to employee to find
+    ///
+    ///
+    ///# Returns
+    ///
+    ///* 'Result<Option<Employee>, ApplicationError>' - Result as
+    ///                         optional Employee return, or error
+    ///     on success:
+    ///         Ok(()) - ok status, and reference to requested Employee
+    ///         Ok - None - no match was found
+    ///     on fail:
+    ///         ApplicationError - the relevant Application error
+    ///         
+    // we will use a somewhat "lazy" approach to caching employee hashes.
+    // load them as needed, and then store them locally
+
+    pub fn get_employee(&mut self, employee_id: i32) -> Result<Option<Employee>, ApplicationError> {
+        if let Some(employee) = self.stored_employees.get(&employee_id) {
+            return Ok(Some(employee.clone()));
+        }
+
+        // if employee was not found locally, attempt to locate it in database
+        match self.database.get_employee(employee_id) {
+            Ok(Some(employee)) => {
+                // when found in db, use it to lazily add/update local storage
+                self.stored_hashes
+                    .insert(employee_id, employee.get_employee_hash().to_string());
+                self.stored_employees.insert(employee_id, employee.clone());
+                Ok(Some(employee))
+            }
+            Ok(None) => Ok(None), // when match result none, return Ok(None)
+            Err(e) => Err(ApplicationError::DatabaseError(e)), // otherwise return error
+        }
+    }
+
+    /// attempts to locate an employee from the database
+    ///
+    /// checks to see if the provided employee id has a match within
+    /// the database, and if it is a valid id number.
+    ///
+    /// # Arguments
+    ///
+    /// * `&mut self` - mutable ref to instance of employehandler
+    /// * `employee_id: i32` - employee id corresponding to the hash to retrieve
+    ///
+    ///# Returns
+    ///
+    ///* 'Result<Option<String>, ApplicationError>' -
+    ///     on success:
+    ///         Ok(true) - Value found, ok status and result of operation (is_some) as boolean value
+    ///         Ok(false) - Value not found, ok status and result of operation (is_some) as boolean
+    ///     on failure / error occurring after get_employee call:
+    ///         ApplicationError - the relevant Application error
+    ///         
+    // we will use a somewhat "lazy" approach to caching employee hashes.
+    // load them as needed, and then store them locally
+    pub fn is_valid_employee_id(&mut self, employee_id: i32) -> Result<bool, ApplicationError> {
+        // attempt to locate the employee using get employee method
+        Ok(self.get_employee(employee_id)?.is_some())
+    }
 
     /// Add a new employee object to storage
     ///
@@ -138,6 +210,8 @@ impl EmployeeHandler {
             employee.get_employee_id(),
             employee.get_employee_hash().to_string(),
         );
+        self.stored_employees
+            .insert(employee.get_employee_id(), employee.clone());
         transaction.commit()?;
         Ok(()) // ok status returned on success
     }
@@ -151,7 +225,7 @@ impl EmployeeHandler {
     ///
     /// * `&mut self` -mutable reference to self(EmployeeManager instance)
     /// * `employee: &Employee` -Reference to a specific Employee object
-
+    ///
     ///# Returns
     ///
     ///* 'Result<(), ApplicationError> ' -
@@ -167,9 +241,10 @@ impl EmployeeHandler {
             employee.get_employee_id(),
             employee.get_employee_hash().to_string(),
         );
+        self.stored_employees
+            .insert(employee.get_employee_id(), employee.clone());
         transaction.commit()?;
         Ok(()) // ok status returned on success
-               //
     }
 
     ///function used to remove/erase an employee from storage
@@ -193,6 +268,7 @@ impl EmployeeHandler {
         let transaction = Transaction::new(&mut self.database)?;
         transaction.db.remove_employee(employee_id)?;
         self.stored_hashes.remove(&employee_id);
+        self.stored_employees.remove(&employee_id);
         transaction.commit()?;
         Ok(()) // ok status returned on success
     }
@@ -328,17 +404,47 @@ impl ClientHandler {
     ///         ApplicationError - the relevant Application error
     ///    
     pub fn update_client(&mut self, client: &Client) -> Result<(), ApplicationError> {
-        let transaction = Transaction::new(&mut self.database)?;
-        transaction
-            .db
-            .update_client(client)
-            .map_err(ApplicationError::from)?;
+        // First, check if the assigned employee has changed
+        let old_employee_id = {
+            let old_client = self.get_client(client.get_client_id())?;
+            old_client.get_asn_employee()
+        };
+
+        let employee_changed = old_employee_id != client.get_asn_employee();
+
+        // Update the database first
+        {
+            let transaction = Transaction::new(&mut self.database)?;
+            transaction
+                .db
+                .update_client(client)
+                .map_err(ApplicationError::from)?;
+            transaction.commit()?;
+        }
+
+        // Now update local structures
+        if employee_changed {
+            // Remove from old employee's list
+            if let Some(client_list) = self.employee_client_pairs.get_mut(&old_employee_id) {
+                client_list.retain(|&id| id != client.get_client_id());
+                if client_list.is_empty() {
+                    self.employee_client_pairs.remove(&old_employee_id);
+                }
+            }
+
+            // Add to new employee's list
+            self.employee_client_pairs
+                .entry(client.get_asn_employee())
+                .or_insert_with(Vec::new)
+                .push(client.get_client_id());
+        }
+
         self.local_avl_tree.remove(client.get_client_id())?;
         self.local_avl_tree.insert(client.clone())?;
-        transaction.commit()?;
 
-        Ok(()) // return okay
+        Ok(())
     }
+
     ///add new client object to data storage
     ///
     ///adds a new client object instance to both the remote database, and the
@@ -361,6 +467,13 @@ impl ClientHandler {
         let transaction = Transaction::new(&mut self.database)?;
         transaction.db.new_client(client)?;
         self.local_avl_tree.insert(client.clone())?;
+
+        // add new client object to employee_client_pairs hashmap
+        self.employee_client_pairs
+            .entry(client.get_asn_employee())
+            .or_insert_with(Vec::new)
+            .push(client.get_client_id());
+
         transaction.commit()?;
 
         Ok(())
@@ -387,6 +500,20 @@ impl ClientHandler {
     pub fn remove_client(&mut self, client: &Client) -> Result<(), ApplicationError> {
         let transaction = Transaction::new(&mut self.database)?;
         transaction.db.remove_client(client)?;
+
+        // attempts to remove a client from their employee pairing
+        if let Some(client_list) = self
+            .employee_client_pairs
+            .get_mut(&client.get_asn_employee())
+        {
+            client_list.retain(|&id| id != client.get_client_id());
+            // employee has no clients? remove id from hashmap keys, to prevent empty list returns
+            if client_list.is_empty() {
+                self.employee_client_pairs
+                    .remove(&client.get_asn_employee());
+            }
+        }
+
         self.local_avl_tree.remove(client.get_client_id())?;
 
         transaction.commit()?;

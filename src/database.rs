@@ -19,7 +19,7 @@ use config::{Config, File};
 use log::debug;
 use std::borrow::Cow;
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 //use std::task::Context;
 // imports the Queryable trait from the mysql crate, prelude module
 use mysql::prelude::*;
@@ -53,8 +53,9 @@ pub struct MySqlDatabase {
 }
 
 impl MySqlDatabase {
-    /// Creates a new instance of the MySqlDatabase
-    /// This is the constructor function to initialize a new
+    /// Constructor function for the the MySqlDatabase implementation
+    ///
+    /// Creates/ implements a new MySqlDatabase object struct/
     /// instance of the database struct. It pulls connection
     /// secrets from a config.toml file, configures the connection
     /// and establishes the new connection pool.
@@ -66,44 +67,51 @@ impl MySqlDatabase {
     ///     'ApplicationError' - An error referencing the cause of the failure
     ///
     pub fn new() -> Result<Self, ApplicationError> {
-        let (user, pw, host, port, db_name) = if let Ok(env) = env::var("ENVIRONMENT") {
-            if env == "production" {
-                // use for remote hoshing on oceanDigital
-                (
-                    // TODO: add more detailed handling such as with the following closure:
-                    // .map_err(|e| ApplicationError::VarNAMEHERE(format!("MSGCONTENT: {}", e)))?,
-                    env::var("DB_USERNAME").map_err(|e| {
-                        ApplicationError::ConfigError(format!("ERROR WITH DB_USERNAME: {}", e))
-                    })?,
-                    env::var("DB_PASSWORD").map_err(|e| {
-                        ApplicationError::ConfigError(format!("ERROR WITH DB_PASSWORD: {}", e))
-                    })?,
-                    env::var("DB_HOST").map_err(|e| {
-                        ApplicationError::ConfigError(format!("ERROR WITH DB_HOST: {}", e))
-                    })?,
-                    env::var("DB_PORT")
-                        .map_err(|e| {
-                            ApplicationError::ConfigError(format!("ERROR WITH DB_PORT: {}", e))
-                        })?
-                        .parse::<u16>()
-                        .map_err(|e| {
-                            ApplicationError::ConfigError(format!("ERROR PARSING DB_PORT: {}", e))
+        let (user, pw, host, port, db_name, cert_path) = if let Ok(env) = env::var("ENVIRONMENT") {
+            // use match instead of if for both dock options
+            match env.as_str() {
+                "production" => {
+                    // ??? use for remote on oceanDigital
+                    (
+                        // TODO: add more detailed handling such as with the following closure:
+                        // .map_err(|e| ApplicationError::VarNAMEHERE(format!("MSGCONTENT: {}", e)))?,
+                        env::var("DB_USERNAME").map_err(|e| {
+                            ApplicationError::ConfigError(format!("ERROR WITH DB_USERNAME: {}", e))
                         })?,
-                    env::var("DB_NAME").map_err(|e| {
-                        ApplicationError::ConfigError(format!("ERROR WITH DB_NAME: {}", e))
-                    })?, // added for remote hosting
-                )
-            } else {
-                Self::local_connection_config()?
+                        env::var("DB_PASSWORD").map_err(|e| {
+                            ApplicationError::ConfigError(format!("ERROR WITH DB_PASSWORD: {}", e))
+                        })?,
+                        env::var("DB_HOST").map_err(|e| {
+                            ApplicationError::ConfigError(format!("ERROR WITH DB_HOST: {}", e))
+                        })?,
+                        env::var("DB_PORT")
+                            .map_err(|e| {
+                                ApplicationError::ConfigError(format!("ERROR WITH DB_PORT: {}", e))
+                            })?
+                            .parse::<u16>()
+                            .map_err(|e| {
+                                ApplicationError::ConfigError(format!(
+                                    "ERROR PARSING DB_PORT: {}",
+                                    e
+                                ))
+                            })?,
+                        env::var("DB_NAME").map_err(|e| {
+                            ApplicationError::ConfigError(format!("ERROR WITH DB_NAME: {}", e))
+                        })?, // isolate remote hosting,so can build local too
+                        PathBuf::from("/usr/src/app/ca-certificate.crt"),
+                    )
+                }
+                "local" => Self::local_connection_config()?, // local docker image build case
+                _ => Self::local_connection_config()?,
             }
         } else {
             Self::local_connection_config()?
         };
-        debug!("Env: {:?}", env::var("ENVIRONMENT"));
 
-        let cert_path = PathBuf::from("/usr/src/app/ca-certificate.crt");
+        // debug!("Env: {:?}", env::var("ENVIRONMENT"));
 
         if cert_path.exists() {
+            // troubleshoot cert contents empty?
             match std::fs::read_to_string(&cert_path) {
                 Ok(content) => debug!(
                     "CERT CONTENT CHECK: {}",
@@ -112,7 +120,7 @@ impl MySqlDatabase {
                 Err(e) => debug!("ERROR READING CERT CONTENT {}", e),
             }
         } else {
-            debug!("CERT FILE MISSING?");
+            debug!("CERT FILE MISSING? CERT PATH: {:?}", cert_path);
             debug!("CURRENT DIR CONTENTS: {:?}", std::fs::read_dir(".")?);
         }
 
@@ -130,7 +138,7 @@ impl MySqlDatabase {
             .db_name(Some(db_name))
             .ssl_opts(Some(ssl_opts));
 
-        debug!("Database options: {:?}", opts);
+        //debug!("Database options: {:?}", opts);
 
         let pool = Pool::new(opts).map_err(|e| ApplicationError::ConfigError(e.to_string()))?;
 
@@ -141,18 +149,14 @@ impl MySqlDatabase {
         //
         debug!("DB connected successfully."); // for troubleshooting / logging
 
-        // add if needed
-        // conn.query_drop("SET SESSION tls_version='TLSv1.?, TLSv1.?'")
-        //     .map_err(|e| {
-        //         ApplicationError::ConfigError(format!("Failed to set TLS version: {}", e))
-        //     })?;
-
         Ok(MySqlDatabase { pool })
     }
-
-    fn local_connection_config() -> Result<(String, String, String, u16, String), ApplicationError>
-    {
-        let path_config = Path::new("config.toml");
+    // split to remove need to set up twice
+    fn local_connection_config(
+    ) -> Result<(String, String, String, u16, String, PathBuf), ApplicationError> {
+        // quick setup to branch between local docker/local cargo build options
+        let path_config =
+            PathBuf::from(env::var("CONFIG_PATH").unwrap_or_else(|_| "./config.toml".to_string()));
         let config = Config::builder()
             .add_source(File::from(path_config).required(true))
             .build()?;
@@ -163,6 +167,7 @@ impl MySqlDatabase {
             config.get_string("database.host")?,
             config.get_int("database.port")? as u16,
             config.get_string("database.name")?,
+            PathBuf::from(config.get_string("database.ca_cert")?),
         ))
     }
 }
@@ -174,6 +179,8 @@ impl MySqlDatabase {
 /// database, querying data, both as retrieval, and to
 /// update or add values. the implementation will handle specifics.
 ///
+/// The implementation of this trait for the MySqlDatabase, is a prime
+/// example of function delegation in rust.
 pub trait DatabaseManager {
     /// init fn to create box clone of DatabaseManager implementation.
     fn clone_box(&self) -> Box<dyn DatabaseManager>;
@@ -199,6 +206,10 @@ pub trait DatabaseManager {
     fn update_employee(&mut self, employee: &Employee) -> Result<(), DatabaseError>;
     /// init fn to remove employee instance from database
     fn remove_employee(&mut self, employee_id: i32) -> Result<(), DatabaseError>;
+    /// init fn to retrieve all employees from database
+    fn get_employees(&self) -> Result<Vec<Employee>, DatabaseError>;
+    /// init fn to retrieve an employee from database
+    fn get_employee(&self, employee_id: i32) -> Result<Option<Employee>, DatabaseError>;
 }
 
 impl Clone for Box<dyn DatabaseManager> {
@@ -395,8 +406,6 @@ impl DatabaseManager for MySqlDatabase {
     }
     /// attempt to update client instance in database
     ///
-    // TODO: client or client_id?
-    ///
     /// # Arguments
     ///
     /// * `&mut self` - mutable reference to MySql database instance
@@ -429,8 +438,6 @@ impl DatabaseManager for MySqlDatabase {
     }
     /// attempt to remove client instance from database
     ///
-    // TODO: client or client_id?
-    ///
     /// # Arguments
     ///
     /// * `client` - The `Client` instance to remove
@@ -462,6 +469,92 @@ impl DatabaseManager for MySqlDatabase {
         )
         .map_err(|e| DatabaseError::QueryError(e.to_string()))
     }
+
+    /// attempt to get an employee from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - reference to (self) MySql database instance
+    ///
+    /// # Returns
+    ///
+    ///* 'Result<(), DatabaseError> ' - Optional Employee object, Error
+    ///* 'employee' vector of `Employee` objects on success
+    ///     on success:
+    ///         Ok(Some(Employee object)) - the located employee object from db
+    ///         Ok(None) - No employee object match found in db
+    ///     on fail:
+    ///         ConnectionError when the database connection cannot be established
+    ///         QueryError on failure to successfully process this select query
+    ///
+    ///# Errors
+    ///
+    ///* 'DatabaseError::ConnectionError' - failure to establish connection to the database
+    ///* 'DatabaseError::QueryError' - failure to execute query on the database
+    ///
+    fn get_employee(&self, employee_id: i32) -> Result<Option<Employee>, DatabaseError> {
+        let mut conn = self
+            .pool
+            .get_conn()
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
+        let result: Option<(i32, String, String)> = conn.exec_first(
+            "SELECT employee_id, employee_name, hashed_password FROM employees WHERE employee_id = :id",
+            params! {"id" => employee_id}
+        ).map_err(|e| DatabaseError::QueryError(e.to_string()))?;
+
+        match result {
+            Some((id, name, hash)) => Employee::new(id, &name, &hash)
+                .map(Some)
+                .map_err(|e| DatabaseError::QueryError(format!("Error creating employee: {}", e))),
+            None => Ok(None),
+        }
+    }
+
+    /// attempt to get all employees from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - reference to (self) MySql database instance
+    ///
+    /// # Returns
+    ///
+    ///* 'Result<(), DatabaseError> ' -
+    ///* 'employees' vector of `Employee` objects on success
+    ///     on success:
+    ///         Ok(Vec<Employee>)- vector of all employee objects & Ok status update
+    ///     on fail:
+    ///         ConnectionError when the database connection cannot be established
+    ///         QueryError on failure to successfully process this select query
+    ///
+    ///# Errors
+    ///
+    ///* 'DatabaseError::ConnectionError' - failure to establish connection to the database
+    ///* 'DatabaseError::QueryError' - failure to execute query on the database
+    ///
+    fn get_employees(&self) -> Result<Vec<Employee>, DatabaseError> {
+        let mut conn = self
+            .pool
+            .get_conn()
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
+        let employee_data: Vec<(i32, String, String)> = conn
+            .query_map(
+                "SELECT employee_id, employee_name, hashed_password FROM employees",
+                |(employee_id, employee_name, hashed_password)| {
+                    (employee_id, employee_name, hashed_password)
+                },
+            )
+            .map_err(|e| DatabaseError::QueryError(e.to_string()))?;
+
+        let mut employees = Vec::new();
+        for (id, name, hash) in employee_data {
+            let employee = Employee::new(id, &name, &hash).map_err(|e| {
+                DatabaseError::QueryError(format!("Error creating employee: {}", e))
+            })?;
+            employees.push(employee);
+        }
+        Ok(employees)
+    }
+
     /// attempt to retrieve employee pass_hash from database
     ///
     /// # Arguments

@@ -34,7 +34,7 @@ use crate::{errors::ApplicationError, firm_models::*};
 ///* `root: Option<Box<Node<T>>>` - optional Box containing Node<T>
 ///
 pub struct AVLTree<T> {
-    // optional smart pointer to avl_node
+    // optional box containing an implemented node<T> struct
     root: Option<Box<Node<T>>>,
 }
 
@@ -98,7 +98,7 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
     pub fn is_empty(&self) -> bool {
         self.root.is_none()
     }
-    /// Destructor function for the AVLTree
+    /// Destructor / removal function for the AVLTree
     ///
     /// this method purges and clears all nodes / elements
     /// from the AVLTree. Assigns the root node the value None, this
@@ -142,7 +142,7 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
     pub fn in_order(&self) {
         Self::in_order_traverse(&self.root);
     }
-    /// in order traversal method implementation
+    /// In order traversal method logic implementation
     ///
     /// Performs recursive in order traversal of this AVLTree.
     /// Effectively prints the data of the tree in order, from smallest
@@ -169,9 +169,7 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
             Self::in_order_traverse(&node.right);
         }
     }
-    /// Calculates the height of the selected node
-    ///
-    ///
+    /// Returns the height of the selected node
     ///
     ///# Arguments
     ///
@@ -230,8 +228,32 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
     ///
     ///* 'Box<Node<T>>' -  The updated subtree after balancing operations
     ///
-    // isolated logic used in insert method to return tree balance
-    // can be used for insert/remove now
+    ///# Behavior
+    ///
+    ///* 1. This function call begins by performing a calculation of the current
+    ///     node being used to call the function.
+    ///* 2. The balance factor is then calculated for this node, using the now
+    ///     updated height value for it.
+    ///* 3. We then use conditional branching to manage the various rotations or
+    ///     balancing operations that may be needed for a particular subtree
+    ///* 4. If the balance factor for the node parameter is greater than 1 (2>=),
+    ///     - we check to see if the left child node, left subtree is heavy OR if
+    ///       the subtree is balanced ( = 0)
+    ///         - when yes left subtree heavy OR balanced (=0),
+    ///           - then perform right rotation on the node  
+    ///     - else, the left child's right subtree is heavy,
+    ///         - we perform a left-right rotation
+    ///* 5. Else if, the balance factor of param node is less than -1 ( <= -2)
+    ///     - check if the right child node's right subtree is right heavy OR if
+    ///       the subtree is balanced ( = 0)
+    ///         - when yes the right subtree is heavy or balanced
+    ///            - perform a left rotation on the subtree
+    ///     - else, the right child node's left subtree is heavy
+    ///         - perform a right, left rotation
+    ///* 6. Return the new, updated and balance node + it's subtree
+    ///
+    // isolated logic used in insert/remove method to return tree balance
+    // no longer duplicated in both location
     fn find_new_balance(mut node: Box<Node<T>>) -> Box<Node<T>> {
         node.height = 1 + std::cmp::max(Self::height(&node.left), Self::height(&node.right));
         let balance = Self::balance_factor(&node);
@@ -266,6 +288,26 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
     ///# Returns
     ///
     ///* 'Box<Node<T>>' - returns the new root of updated subtree after rotation
+    ///
+    ///# Behavior
+    ///
+    ///* 1. We are taking the left child node of the child node parameter, and then
+    ///     making it the new value for parent node
+    ///* 2. Then we take the right child node of parent node, and store it as the
+    ///     temporary node
+    ///* 3. We then clone the necessary data objects to avoid the need to manage
+    ///     the data's lifetimes.
+    ///* 4. Next we begin restructuring / balancing
+    ///     - we set left child of the child_node param as the node we previously
+    ///     assigned to temp
+    ///     - we then create a new right child node of parent using node constructor
+    ///     with the data that child_node contains, and we assign the new positions
+    ///     of it's children
+    ///* 5. We then update the height values of the new subtrees
+    ///     - first update the height for new right child of parent_node (data
+    ///     from prev child_node)
+    ///     - then we set the height of the parent node
+    ///* 6. Return parent_node
     ///
     fn right_rotate(mut child_node: Box<Node<T>>) -> Box<Node<T>> {
         let mut parent_node = child_node.left.take().unwrap();
@@ -306,6 +348,22 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
     ///# Returns
     ///
     ///* 'Box<Node<T>>' - returns the updated subtree, (new subtree root)
+    ///
+    ///# Behavior
+    ///
+    ///* 1. We are taking the right child node of the parent node parameter, and  then making it the
+    ///     new value for child_node
+    ///* 2. Then we take the left child node of child node, and store it as the temporary node
+    ///* 3. We then clone the necessary data objects to avoid the need to manage
+    ///     the data's lifetimes.
+    ///* 4. Next we begin restructuring / balancing
+    ///     - we set right child of the parent node param as the node we previously assigned to temp
+    ///     - we then create a new left child node of child_node using node constructor with the
+    ///       data that parent_node contains, and we assign the new positions of it's children
+    ///* 5. We then update the height values of the new subtrees
+    ///     - first update the height for new left child of child_node (data from prev parent_node)
+    ///     - then we set the height of the child_node
+    ///* 6. Return child_node
     ///
     fn left_rotate(mut parent_node: Box<Node<T>>) -> Box<Node<T>> {
         let mut child_node = parent_node.right.take().unwrap();
@@ -383,6 +441,20 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
     ///     if Some - match found returns reference to the matching data object T
     ///     if None - no match found, returns nothing
     ///
+    ///# Behavior
+    ///
+    ///* 1. We start with a check to sees whether current node is a leaf or
+    ///     if the tree / subtree does not have any children (is empty)
+    ///     - When None is the result, we return None (node not found)
+    ///* 2. We then use match to current_node's data, and we compare the data
+    ///     of it's key (client_id) against the parameter value for target key
+    ///     - If the data values match, then we found the target node, return
+    ///       Some, a reference to the data object that is stored within the node
+    ///     - If the value is less than the current_node's key, then we recursively
+    ///       call the left child node with this function to repeat the process with
+    ///       left subtree.
+    ///     - If the value is greater than, we do use the right subtree / child node
+    ///       to recursively search for the matching node
     ///
     fn find_value<'a>(
         &'a self,
@@ -452,6 +524,25 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
     ///function is concluded on successfully finding insert position by calling the find_new_balance()
     ///fn to calculate new height, and to balance the subtree branches (left/right rotations)
     ///
+    ///# Behavior
+    ///
+    ///* 1. We start with a check to sees whether current node is a leaf or
+    ///     if the tree / subtree does not have any children (is empty)
+    ///     - When None is result, we create a new node with the data object from parameter
+    ///       and then we return that Some (new node)
+    ///* 2. If the node already exists at the position, we compare the key of the param data
+    ///     object against the current_node's key (client_id)
+    ///* 3. A match statement is used to process the comparison of these keys
+    ///     - if the value from data is less that current node's key, we recursively call
+    ///       the insert_value function with the current node's left child node position
+    ///     - if the key value is greater than the current node's then we do the same,
+    ///       calling the insert_value with the right child node.
+    ///       if the values are equal, then we return an error, because we are attempting
+    ///       to insert a data object with a duplicate key value.
+    ///* 4. after the insertion process, we then call the find new balance function to update
+    ///     the height and rebalance subtrees if necessary
+    ///* 5. We then return the balanced, updated subtree post insertion
+    ///
     fn insert_value(
         node: Option<Box<Node<T>>>,
         data: T,
@@ -501,7 +592,6 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
     ///*    On failure return:
     ///         'ApplicationError::NoMatchError' when no client for provided key found
     ///
-    ///
     pub fn remove(&mut self, key: i32) -> Result<T, ApplicationError> {
         let (new_root, deleted_value) = Self::remove_node(self.root.take(), key)?;
         self.root = new_root;
@@ -536,6 +626,32 @@ impl<T: Ord + Clone + Identification + std::fmt::Debug> AVLTree<T> {
     ///             if None - should not occur, instead noMatchError occurs
     ///     On failure returns ApplicationError
     ///         Returns the NoMatchError with related error message
+    ///
+    ///# Behavior
+    ///
+    ///* 1. Start out by checking if the current node is empty, or if it is a leaf
+    ///     without and children
+    ///     - when None is returned it means that no match was found, so we return
+    ///       a no match error
+    ///* 2. When the node exists at the position, we compare the key of it against the key
+    ///     passed in as an argument
+    ///* 3. we then use a match statement to evaluate the comparisons
+    ///     - When current node key is less than argument key value
+    ///         call remove node on the left child / left subtree of node
+    ///     - when current key is greater than the argument key
+    ///         we call remove node of the right subtree
+    ///     - when the key values are equal, we then move to delete processing
+    ///       - if there are no children nodes, we do not need to worry about
+    ///         repositioning the tree, return None and the data value
+    ///     - when there is only a left child, return left child and deleted value
+    ///     - when there is only a right child, return  the right child,
+    ///       and the deleted value
+    ///     - when there are two child nodes, find the min value from right subtree,
+    ///       using remove min fn, replace the current_node's data with that value,
+    ///       we are left with the new right value and successor
+    ///* 4. After a successful removal, we need to adjust the tree balance, as it may
+    ///     need to be balanced.
+    ///* 5. return the new, balanced subtree
     ///
     fn remove_node(
         node: Option<Box<Node<T>>>,
